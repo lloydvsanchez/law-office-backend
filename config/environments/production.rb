@@ -55,7 +55,22 @@ Rails.application.configure do
   # config.action_mailer.raise_delivery_errors = false
 
   # Set host to be used by links generated in mailer templates.
-  config.action_mailer.default_url_options = { host: "example.com" }
+  config.action_mailer.delivery_method = :smtp
+  config.action_mailer.perform_deliveries = true
+  config.action_mailer.raise_delivery_errors = true
+
+  config.action_mailer.smtp_settings = {
+    address:              ENV['SMTP_ADDRESS'],     # e.g., 'smtp.postmarkapp.com' or 'smtp.resend.com'
+    port:                 587,
+    domain:               ENV['SMTP_DOMAIN'],      # Your verified sending domain
+    user_name:            ENV['SMTP_USERNAME'],   # Your API key or username
+    password:             ENV['SMTP_PASSWORD'],   # Your API token or password
+    authentication:       :plain,
+    enable_starttls_auto: true
+  }
+
+  # Set a default host for links generated inside your emails
+  config.action_mailer.default_url_options = { host: 'law-office-backend-f5y1.onrender.com' }
 
   # Specify outgoing SMTP server. Remember to add smtp/* credentials via rails credentials:edit.
   # config.action_mailer.smtp_settings = {
