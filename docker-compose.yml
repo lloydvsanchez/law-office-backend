@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: law_office_development
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build: .
+    command: bundle exec rails server -b 0.0.0.0 -p 3000
+    volumes:
+      - .:/rails
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:secret@db:5432/law_office_development
+      RAILS_ENV: development
+      RAILS_MASTER_KEY: a889b19ac7eaa430dec952bc6e5961cc
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
