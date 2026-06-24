@@ -61,7 +61,7 @@ Rails.application.configure do
 
   config.action_mailer.smtp_settings = {
     address:              'smtp.resend.com',     # e.g., 'smtp.postmarkapp.com' or 'smtp.resend.com'
-    port:                 587,
+    port:                 465,#587,
     domain:               'resend.com',      # Your verified sending domain
     user_name:            'resend',   # Your API key or username
     password:             ENV['SMTP_PASSWORD'],   # Your API token or password
