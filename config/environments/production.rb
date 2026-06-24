@@ -60,10 +60,10 @@ Rails.application.configure do
   config.action_mailer.raise_delivery_errors = true
 
   config.action_mailer.smtp_settings = {
-    address:              ENV['SMTP_ADDRESS'],     # e.g., 'smtp.postmarkapp.com' or 'smtp.resend.com'
+    address:              'smtp.resend.com',     # e.g., 'smtp.postmarkapp.com' or 'smtp.resend.com'
     port:                 587,
-    domain:               ENV['SMTP_DOMAIN'],      # Your verified sending domain
-    user_name:            ENV['SMTP_USERNAME'],   # Your API key or username
+    domain:               'resend.com',      # Your verified sending domain
+    user_name:            'resend',   # Your API key or username
     password:             ENV['SMTP_PASSWORD'],   # Your API token or password
     authentication:       :plain,
     enable_starttls_auto: true
