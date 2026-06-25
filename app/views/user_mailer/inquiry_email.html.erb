@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Legal Inquiry</title>
+  </head>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f5f7; margin: 0; padding: 20px; -webkit-font-smoothing: antialiased;">
+    
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; border: 1px solid #e1e4e8; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+      
+      <!-- Header banner -->
+      <tr>
+        <td style="background-color: #1a2a3a; padding: 30px 40px; text-align: center;">
+          <h1 style="color: #ffffff; font-size: 22px; font-weight: 600; margin: 0; letter-spacing: 0.5px; text-transform: uppercase;">
+            New Client Inquiry
+          </h1>
+          <p style="color: #a0aec0; font-size: 14px; margin: 5px 0 0 0;">Law Office Intake System</p>
+        </td>
+      </tr>
+
+      <!-- Content Area -->
+      <tr>
+        <td style="padding: 40px;">
+          <p style="font-size: 16px; color: #4a5568; line-height: 1.5; margin-top: 0; margin-bottom: 25px;">
+            A new legal inquiry has been submitted through the website form. Below are the structured details provided by the prospect:
+          </p>
+
+          <!-- Intake Form Grid/Table -->
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; margin-bottom: 30px;">
+            
+            <tr>
+              <td width="35%" style="padding: 12px 0; border-bottom: 1px solid #edf2f7; font-size: 14px; font-weight: 600; color: #718096; text-transform: uppercase; letter-spacing: 0.5px;">Client Name</td>
+              <td style="padding: 12px 0; border-bottom: 1px solid #edf2f7; font-size: 15px; color: #2d3748;"><%= @inquiry[:name].presence || "Not specified" %></td>
+            </tr>
+
+            <tr>
+              <td style="padding: 12px 0; border-bottom: 1px solid #edf2f7; font-size: 14px; font-weight: 600; color: #718096; text-transform: uppercase; letter-spacing: 0.5px;">Contact Info</td>
+              <td style="padding: 12px 0; border-bottom: 1px solid #edf2f7; font-size: 15px; color: #2d3748;"><%= @inquiry[:contact].presence || "Not specified" %></td>
+            </tr>
+
+            <tr>
+              <td style="padding: 12px 0; border-bottom: 1px solid #edf2f7; font-size: 14px; font-weight: 600; color: #718096; text-transform: uppercase; letter-spacing: 0.5px;">Pref. Contact</td>
+              <td style="padding: 12px 0; border-bottom: 1px solid #edf2f7; font-size: 15px; color: #2d3748;"><%= @inquiry[:preferred_contact].presence || "Not specified" %></td>
+            </tr>
+
+            <tr>
+              <td style="padding: 12px 0; border-bottom: 1px solid #edf2f7; font-size: 14px; font-weight: 600; color: #718096; text-transform: uppercase; letter-spacing: 0.5px;">Legal Concern</td>
+              <td style="padding: 12px 0; border-bottom: 1px solid #edf2f7; font-size: 15px; font-weight: 600; color: #1a2a3a;"><%= @inquiry[:concern].presence || "General Legal Matter" %></td>
+            </tr>
+
+            <tr>
+              <td style="padding: 12px 0; border-bottom: 1px solid #edf2f7; font-size: 14px; font-weight: 600; color: #718096; text-transform: uppercase; letter-spacing: 0.5px;">Relevant Dates</td>
+              <td style="padding: 12px 0; border-bottom: 1px solid #edf2f7; font-size: 15px; color: #2d3748;"><%= @inquiry[:dates].presence || "N/A" %></td>
+            </tr>
+
+            <tr>
+              <td style="padding: 12px 0; border-bottom: 1px solid #edf2f7; font-size: 14px; font-weight: 600; color: #718096; text-transform: uppercase; letter-spacing: 0.5px;">Location</td>
+              <td style="padding: 12px 0; border-bottom: 1px solid #edf2f7; font-size: 15px; color: #2d3748;"><%= @inquiry[:location].presence || "Not specified" %></td>
+            </tr>
+
+          </table>
+
+          <!-- Message Block -->
+          <div style="background-color: #f8fafc; border-left: 4px solid #1a2a3a; padding: 20px; border-radius: 0 4px 4px 0;">
+            <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 14px; font-weight: 700; color: #1a2a3a; text-transform: uppercase; letter-spacing: 0.5px;">Case Details & Message:</h3>
+            <p style="margin: 0; font-size: 15px; color: #4a5568; line-height: 1.6; white-space: pre-wrap;"><%= @inquiry[:message].presence || "No message detailed." %></p>
+          </div>
+
+        </td>
+      </tr>
+
+      <!-- Footer -->
+      <tr>
+        <td style="background-color: #f8fafc; padding: 20px 40px; text-align: center; border-top: 1px solid #edf2f7;">
+          <p style="margin: 0; font-size: 12px; color: #a0aec0;">
+            This email was auto-generated by your law office backend API hosted on Render.
+          </p>
+        </td>
+      </tr>
+
+    </table>
+
+  </body>
+</html>
