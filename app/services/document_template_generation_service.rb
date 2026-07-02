@@ -1,11 +1,12 @@
 class DocumentTemplateGenerationService
-  def initialize(document_template:, generation_log:)
+  def initialize(document_template:, generation_log:, provider: nil)
     @template = document_template
     @log      = generation_log
+    @provider = provider
   end
 
   def call
-    provider = LlmProvider.find_by(is_active: true)
+    provider = @provider || LlmProvider.find_by(is_active: true)
     raise "No active LLM provider configured" unless provider
 
     adapter = Llm::AdapterFactory.for(provider)
@@ -13,7 +14,7 @@ class DocumentTemplateGenerationService
 
     @template.update!(
       content_raw:     result[:content],
-      status:          "active",
+      status:          "review",
       current_version: 1
     )
 
@@ -21,7 +22,7 @@ class DocumentTemplateGenerationService
       llm_provider:      provider,
       prompt_tokens:     result[:prompt_tokens],
       completion_tokens: result[:completion_tokens],
-      status:            "completed"
+      status:            "success"
     )
 
   rescue => e

@@ -1,21 +1,26 @@
 class DocumentTemplateGenerationJob < ApplicationJob
   queue_as :default
 
-  def perform(document_template_id, generation_log_id, user_id)
+  def perform(document_template_id, generation_log_id, user_id = nil, provider_id = nil)
     template = DocumentTemplate.find(document_template_id)
     log      = GenerationLog.find(generation_log_id)
-
-    DocumentTemplateGenerationService.new(
+    parameters = {
       document_template: template,
-      generation_log:    log
-    ).call
+      generation_log:    log,
+    }
+    parameters.merge!({ provider: LlmProvider.find(provider_id)}) if provider_id
 
-    # Hook for your in-app notification on success
-    # NotificationService.notify_success(user_id, template) — you handle this
+    DocumentTemplateGenerationService.new(**parameters).call
+
+    # Only notify if triggered by a real user
+    if user_id.present?
+      # NotificationService.notify_success(user_id, template)
+    end
 
   rescue => e
-    # Hook for your in-app notification on failure
-    # NotificationService.notify_failure(user_id, e.message) — you handle this
+    if user_id.present?
+      # NotificationService.notify_failure(user_id, e.message)
+    end
 
     Rails.logger.error "[DocumentTemplateGenerationJob] Failed for template #{document_template_id}: #{e.message}"
   end

@@ -1,6 +1,7 @@
 class TemplateCourtLevel < ApplicationRecord
     belongs_to :template,
-               class_name: "DocumentTemplate"
+              foreign_key: "template_id", 
+              class_name: "DocumentTemplate"
   
     validates :court_level, presence: true
   

@@ -38,6 +38,8 @@ gem "thruster", require: false
 gem "rack-cors"
 
 gem "resend"
+gem "fuzzy_match"
+gem "neighbor"
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
@@ -50,4 +52,5 @@ group :development, :test do
   gem "rubocop-rails-omakase", require: false
 
   gem "dotenv-rails"
+  gem "pry"
 end

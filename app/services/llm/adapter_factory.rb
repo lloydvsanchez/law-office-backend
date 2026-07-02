@@ -4,7 +4,8 @@ module Llm
       "openai"     => Llm::OpenaiAdapter,
       "anthropic"  => Llm::AnthropicAdapter,
       "gemini"     => Llm::GeminiAdapter,
-      "groq"       => Llm::GroqAdapter
+      "groq"       => Llm::GroqAdapter,
+      "mistral"    => Llm::MistralAdapter
     }.freeze
 
     def self.for(provider)

@@ -10,12 +10,13 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_06_30_151908) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_01_085549) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+  enable_extension "vector"
 
   create_table "document_templates", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.uuid "organization_id", null: false
+    t.uuid "organization_id"
     t.uuid "created_by_id"
     t.uuid "updated_by_id"
     t.string "title", null: false
@@ -37,6 +38,18 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_30_151908) do
     t.index ["practice_area"], name: "index_document_templates_on_practice_area"
     t.index ["status"], name: "index_document_templates_on_status"
     t.index ["updated_by_id"], name: "index_document_templates_on_updated_by_id"
+  end
+
+  create_table "embedding_providers", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "name", null: false
+    t.string "adapter_key", null: false
+    t.string "model", null: false
+    t.jsonb "config", default: {}
+    t.boolean "is_active", default: false, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["adapter_key"], name: "index_embedding_providers_on_adapter_key"
+    t.index ["is_active"], name: "index_embedding_providers_on_is_active"
   end
 
   create_table "file_attachments", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -88,6 +101,18 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_30_151908) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["slug"], name: "index_organizations_on_slug", unique: true
+  end
+
+  create_table "template_chunks", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "document_template_id", null: false
+    t.integer "chunk_index", null: false
+    t.text "content", null: false
+    t.vector "embedding", limit: 768
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["document_template_id", "chunk_index"], name: "index_template_chunks_on_document_template_id_and_chunk_index", unique: true
+    t.index ["document_template_id"], name: "index_template_chunks_on_document_template_id"
+    t.index ["embedding"], name: "index_template_chunks_on_embedding_hnsw", opclass: :vector_cosine_ops, using: :hnsw
   end
 
   create_table "template_clauses", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -168,6 +193,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_30_151908) do
   add_foreign_key "generation_logs", "document_templates", column: "template_id"
   add_foreign_key "generation_logs", "llm_providers"
   add_foreign_key "generation_logs", "users", column: "generated_by_id"
+  add_foreign_key "template_chunks", "document_templates"
   add_foreign_key "template_clauses", "document_templates", column: "template_id"
   add_foreign_key "template_court_levels", "document_templates", column: "template_id"
   add_foreign_key "template_tags", "document_templates", column: "template_id"

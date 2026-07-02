@@ -5,7 +5,8 @@ class GenerationLog < ApplicationRecord
     belongs_to :llm_provider
   
     belongs_to :generated_by,
-               class_name: "User"
+               class_name: "User",
+               optional: true
   
     enum :status,
          {
