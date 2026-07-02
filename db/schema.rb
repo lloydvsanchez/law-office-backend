@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_01_085549) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_02_065542) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "vector"
@@ -45,11 +45,22 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_01_085549) do
     t.string "adapter_key", null: false
     t.string "model", null: false
     t.jsonb "config", default: {}
-    t.boolean "is_active", default: false, null: false
+    t.boolean "is_enabled", default: false, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "status", default: "healthy", null: false
+    t.integer "priority", default: 10, null: false
+    t.integer "failure_threshold", default: 3, null: false
+    t.integer "failure_count", default: 0, null: false
+    t.text "last_error"
+    t.datetime "last_used_at"
+    t.datetime "last_checked_at"
+    t.datetime "quota_resets_at"
     t.index ["adapter_key"], name: "index_embedding_providers_on_adapter_key"
-    t.index ["is_active"], name: "index_embedding_providers_on_is_active"
+    t.index ["is_enabled"], name: "index_embedding_providers_on_is_enabled"
+    t.index ["priority"], name: "index_embedding_providers_on_priority"
+    t.index ["status"], name: "index_embedding_providers_on_status"
+    t.check_constraint "status::text = ANY (ARRAY['healthy'::character varying, 'rate_limited'::character varying, 'quota_exhausted'::character varying, 'unreachable'::character varying]::text[])", name: "chk_embedding_provider_status"
   end
 
   create_table "file_attachments", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -89,9 +100,21 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_01_085549) do
     t.string "adapter_key"
     t.string "model"
     t.jsonb "config", default: {}
-    t.boolean "is_active", default: true
+    t.boolean "is_enabled", default: true
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "status", default: "healthy", null: false
+    t.integer "priority", default: 10, null: false
+    t.integer "failure_threshold", default: 3, null: false
+    t.integer "failure_count", default: 0, null: false
+    t.text "last_error"
+    t.datetime "last_used_at"
+    t.datetime "last_checked_at"
+    t.datetime "quota_resets_at"
+    t.index ["is_enabled"], name: "index_llm_providers_on_is_enabled"
+    t.index ["priority"], name: "index_llm_providers_on_priority"
+    t.index ["status"], name: "index_llm_providers_on_status"
+    t.check_constraint "status::text = ANY (ARRAY['healthy'::character varying, 'rate_limited'::character varying, 'quota_exhausted'::character varying, 'unreachable'::character varying]::text[])", name: "chk_llm_provider_status"
   end
 
   create_table "organizations", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|

@@ -1,8 +1,8 @@
-require "fuzzy_match"
-
 class DocumentTemplateSeedService
-  # Levenshtein similarity threshold — titles scoring above this are considered duplicates
-  SIMILARITY_THRESHOLD = 0.8
+  DUPLICATE_SIMILARITY_THRESHOLD = 0.75
+  # Cosine distance threshold — inverse of similarity
+  # 1 - 0.75 = 0.25 means vectors must be within 0.25 distance to be considered duplicates
+  DUPLICATE_DISTANCE_THRESHOLD = 1 - DUPLICATE_SIMILARITY_THRESHOLD
 
   PRACTICE_AREAS = %w[
     civil
@@ -17,29 +17,27 @@ class DocumentTemplateSeedService
     intellectual_property
   ].freeze
 
-  def self.call(limit:, practice_area: nil, provider: nil)
-    new(limit: limit, practice_area: practice_area, provider: ).call
+  def self.call(limit:, practice_area: nil)
+    new(limit: limit, practice_area: practice_area).call
   end
 
-  attr_reader :provider
-
-  def initialize(limit:, practice_area: nil, provider: nil)
-    @limit         = limit
-    @practice_area = practice_area
-    @result        = { enqueued: 0, skipped: 0, failed: 0 }
-    @provider      = provider
+  def initialize(limit:, practice_area: nil)
+    @limit          = limit
+    @practice_area  = practice_area
+    @result         = { enqueued: 0, skipped: 0, failed: 0 }
+    @enqueued_titles = Set.new  # Option A — tracks same-run enqueued titles
   end
 
   def call
-    @provider ||= LlmProvider.find_by(is_active: true)
-    raise "No active LLM provider configured" unless provider
+    @provider           = ProviderSelector.primary(LlmProvider)
+    @embedding_provider = ProviderSelector.primary(EmbeddingProvider)
 
-    existing_titles = DocumentTemplate.pluck(:title)
-    suggestions     = fetch_suggestions(provider: provider, existing_titles: existing_titles)
+    suggestions = fetch_suggestions
+
     Rails.logger.info "[SeedService] LLM returned #{suggestions.size} suggestions"
-    
+
     suggestions.each do |suggestion|
-      process_suggestion(suggestion, existing_titles)
+      process_suggestion(suggestion)
     end
 
     @result
@@ -47,35 +45,63 @@ class DocumentTemplateSeedService
 
   private
 
-  def fetch_suggestions(provider:, existing_titles:)
-    adapter  = Llm::AdapterFactory.for(provider)
-    prompt   = build_list_prompt(existing_titles)
-    response = adapter.generate(prompt: prompt)
-    parse_suggestions(response[:content])
+  def fetch_suggestions
+    prompt = build_list_prompt
+    result = call_with_fallback(prompt)
+    parse_suggestions(result[:content])
+  rescue ProviderUnavailableError => e
+    Rails.logger.error "[SeedService] All LLM providers unavailable: #{e.message}"
+    []
   rescue => e
     Rails.logger.error "[SeedService] Failed to fetch suggestions: #{e.message}"
     []
   end
 
-  def process_suggestion(suggestion, existing_titles)
+  def call_with_fallback(prompt)
+    adapter = Llm::AdapterFactory.for(@provider)
+    result  = adapter.generate(prompt: prompt)
+    ProviderSelector.handle_success(@provider)
+    result
+
+  rescue => e
+    ProviderSelector.handle_failure(@provider, error: e)
+    Rails.logger.warn "[SeedService] Primary LlmProvider '#{@provider.name}' failed — trying fallback"
+
+    fallback = ProviderSelector.fallback(LlmProvider, exclude: @provider)
+    raise ProviderUnavailableError.new(LlmProvider) unless fallback
+
+    @provider = fallback
+    adapter   = Llm::AdapterFactory.for(@provider)
+    result    = adapter.generate(prompt: prompt)
+    ProviderSelector.handle_success(@provider)
+    result
+  end
+
+  def process_suggestion(suggestion)
     title = suggestion["title"].to_s.strip
 
     if title.blank?
-      Rails.logger.warn "[SeedService] Skipping blank title in suggestion: #{suggestion.inspect}"
+      Rails.logger.warn "[SeedService] Skipping blank title: #{suggestion.inspect}"
       @result[:skipped] += 1
       return
     end
 
-    if similar_exists?(title, existing_titles)
-      Rails.logger.info "[SeedService] Skipping '#{title}' — similar title already exists"
+    # Option A — fast in-memory check for same-run duplicates first
+    if same_run_duplicate?(title)
+      Rails.logger.info "[SeedService] Skipping '#{title}' — duplicate within this run"
+      @result[:skipped] += 1
+      return
+    end
+
+    # Cross-run check — semantic similarity against pgvector
+    if similar_in_database?(title)
+      Rails.logger.info "[SeedService] Skipping '#{title}' — similar template exists in database"
       @result[:skipped] += 1
       return
     end
 
     enqueue_generation(suggestion)
-    # Add the new title to existing_titles in memory so subsequent
-    # iterations in the same run also check against it
-    existing_titles << title
+    @enqueued_titles << title.downcase  # register for same-run duplicate detection
     @result[:enqueued] += 1
 
   rescue => e
@@ -83,53 +109,61 @@ class DocumentTemplateSeedService
     @result[:failed] += 1
   end
 
-  def similar_exists?(title, existing_titles)
-    return false if existing_titles.empty?
+  # Option A — case-insensitive exact match against same-run enqueued titles
+  def same_run_duplicate?(title)
+    @enqueued_titles.include?(title.downcase)
+  end
 
-    matcher = FuzzyMatch.new(existing_titles)
-    match, score = matcher.find_with_score(title)
-    match.present? && score >= SIMILARITY_THRESHOLD
+  # Embeds the suggestion title and checks pgvector for semantically similar templates
+  def similar_in_database?(title)
+    return false unless TemplateChunk.exists?  # skip if pgvector is empty
+
+    adapter   = Embedding::AdapterFactory.for(@embedding_provider)
+    embedding = adapter.embed(text: title)
+
+    TemplateChunk
+      .joins(:document_template)
+      .where("document_templates.status != ?", "draft")
+      .where("embedding <=> ? <= ?", embedding.to_s, DUPLICATE_DISTANCE_THRESHOLD)
+      .exists?
+
+  rescue => e
+    # If embedding check fails, log and allow the suggestion through
+    # Better to risk a duplicate than block valid new templates
+    Rails.logger.warn "[SeedService] Similarity check failed for '#{title}': #{e.message} — allowing through"
+    false
   end
 
   def enqueue_generation(suggestion)
     template = DocumentTemplate.create!(
-      title:        suggestion["title"].to_s.strip,
-      description:  suggestion["description"].to_s.strip,
+      title:         suggestion["title"].to_s.strip,
+      description:   suggestion["description"].to_s.strip,
       practice_area: suggestion["practice_area"].to_s.strip,
-      language:     "English",
-      status:       "draft",
-      source:       "ai_generated",
-      visibility:   "public"
+      language:      "English",
+      status:        "draft",
+      source:        "ai_generated",
+      visibility:    "public"
     )
 
     log = GenerationLog.create!(
-      template: template,
-      trigger_type:      "seed",
-      prompt_summary:    suggestion["description"].to_s.truncate(255),
-      status:            "pending",
-      llm_provider: provider
+      template:       template,
+      trigger_type:   "seed",
+      prompt_summary: suggestion["description"].to_s.truncate(255),
+      status:         "pending",
+      llm_provider:   @provider
     )
 
-    # No user_id here since this is a system-triggered seed, not a lawyer request
     DocumentTemplateGenerationJob.perform_now(
       template.id.to_s,
       log.id.to_s,
-      nil,
-      provider.id.to_s
     )
   end
 
-  def build_list_prompt(existing_titles)
+  def build_list_prompt
     area_instruction = if @practice_area.present?
       "Focus specifically on the '#{@practice_area}' practice area."
     else
       "Distribute the suggestions evenly and balanced across these Philippine legal practice areas: #{PRACTICE_AREAS.join(', ')}."
-    end
-
-    exclusion_hint = if existing_titles.any?
-      "Avoid suggesting documents similar to any of these already existing titles:\n#{existing_titles.first(50).join("\n")}"
-    else
-      "The database is currently empty, so all suggestions are welcome."
     end
 
     <<~PROMPT
@@ -138,8 +172,6 @@ class DocumentTemplateSeedService
       Return a JSON array of exactly #{@limit} popular Philippine legal document templates that a law firm would commonly need.
 
       #{area_instruction}
-
-      #{exclusion_hint}
 
       Each item in the array must have exactly these keys:
       - "title": the document name (e.g. "Contract of Lease for Residential Property")

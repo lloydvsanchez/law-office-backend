@@ -1,16 +1,11 @@
 class DocumentTemplateGenerationJob < ApplicationJob
   queue_as :default
 
-  def perform(document_template_id, generation_log_id, user_id = nil, provider_id = nil)
+  def perform(document_template_id, generation_log_id, user_id = nil)
     template = DocumentTemplate.find(document_template_id)
     log      = GenerationLog.find(generation_log_id)
-    parameters = {
-      document_template: template,
-      generation_log:    log,
-    }
-    parameters.merge!({ provider: LlmProvider.find(provider_id)}) if provider_id
 
-    DocumentTemplateGenerationService.new(**parameters).call
+    DocumentTemplateGenerationService.new(document_template: template, generation_log: log).call
 
     # Only notify if triggered by a real user
     if user_id.present?
