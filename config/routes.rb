@@ -9,6 +9,19 @@ Rails.application.routes.draw do
     namespace :v1 do
       get "health", to: "health#show"
       post "email_inquiry", to: "email#inquiry"
+      
+      scope :templates do
+        get ":id", to: "templates#show"
+      end
+      namespace :templates do
+        post :search, to: "searches#create"
+      end
+     
+      resources :generations, only: [] do
+        member do
+          get :status
+        end
+      end
     end
   end
 

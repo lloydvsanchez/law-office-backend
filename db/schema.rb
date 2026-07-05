@@ -10,9 +10,10 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_02_065542) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_03_062656) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+  enable_extension "pg_trgm"
   enable_extension "vector"
 
   create_table "document_templates", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -37,6 +38,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_02_065542) do
     t.index ["organization_id"], name: "index_document_templates_on_organization_id"
     t.index ["practice_area"], name: "index_document_templates_on_practice_area"
     t.index ["status"], name: "index_document_templates_on_status"
+    t.index ["title"], name: "index_document_templates_on_title_trgm", opclass: :gin_trgm_ops, using: :gin
     t.index ["updated_by_id"], name: "index_document_templates_on_updated_by_id"
   end
 
