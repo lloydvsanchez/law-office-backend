@@ -69,4 +69,7 @@ Rails.application.configure do
   # config.generators.apply_rubocop_autocorrect_after_generate!
 
   config.action_mailer.delivery_method = :resend
+
+  config.active_job.queue_adapter = :good_job
+  config.good_job.execution_mode  = :inline
 end

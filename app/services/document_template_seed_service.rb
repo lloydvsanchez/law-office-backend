@@ -135,27 +135,31 @@ class DocumentTemplateSeedService
   end
 
   def enqueue_generation(suggestion)
+    enriched_description = QueryEnrichmentService.call(query: suggestion["description"].to_s.strip)
+  
     template = DocumentTemplate.create!(
       title:         suggestion["title"].to_s.strip,
-      description:   suggestion["description"].to_s.strip,
+      description:   enriched_description,
       practice_area: suggestion["practice_area"].to_s.strip,
       language:      "English",
       status:        "draft",
       source:        "ai_generated",
       visibility:    "public"
     )
-
+  
     log = GenerationLog.create!(
       template:       template,
       trigger_type:   "seed",
-      prompt_summary: suggestion["description"].to_s.truncate(255),
+      prompt_summary: enriched_description.truncate(255),
       status:         "pending",
       llm_provider:   @provider
     )
-
+  
     DocumentTemplateGenerationJob.perform_now(
       template.id.to_s,
       log.id.to_s,
+      nil,
+      @provider.id.to_s
     )
   end
 

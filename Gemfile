@@ -40,9 +40,8 @@ gem "rack-cors"
 gem "resend"
 gem "fuzzy_match"
 gem "neighbor"
-gem "whenever"
 gem "redis"
-gem "sidekiq"
+gem "good_job"
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem

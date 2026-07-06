@@ -1,18 +1,31 @@
 class DocumentTemplateChunkingService
-  MIN_CHUNK_LENGTH = 50   # skip chunks too short to be meaningful
-  MAX_CHUNK_LENGTH = 1000 # keep chunks within embedding model token limits
+  MIN_CHUNK_LENGTH = 50
+  MAX_CHUNK_LENGTH = 1000
 
-  def self.call(content_raw)
-    new(content_raw).call
+  def self.call(content, chunk_type: "content")
+    new(content, chunk_type: chunk_type).call
   end
 
-  def initialize(content_raw)
-    @content_raw = content_raw.to_s
+  def initialize(content, chunk_type: "content")
+    @content    = content.to_s
+    @chunk_type = chunk_type
   end
 
   def call
-    paragraphs = @content_raw
-      .split(/\n{2,}/)       # split on blank lines (paragraph breaks)
+    case @chunk_type
+    when "intent"
+      # Intent is always a single chunk — no splitting needed
+      [{ chunk_index: 0, content: @content.strip }]
+    when "content"
+      split_into_paragraphs
+    end
+  end
+
+  private
+
+  def split_into_paragraphs
+    paragraphs = @content
+      .split(/\n{2,}/)
       .map(&:strip)
       .reject { |p| p.length < MIN_CHUNK_LENGTH }
 
@@ -21,7 +34,6 @@ class DocumentTemplateChunkingService
       if paragraph.length <= MAX_CHUNK_LENGTH
         chunks << paragraph
       else
-        # Split oversized paragraphs by sentence
         chunks.concat(split_by_sentence(paragraph))
       end
     end
@@ -31,10 +43,7 @@ class DocumentTemplateChunkingService
     end
   end
 
-  private
-
   def split_by_sentence(text)
-    # Naive sentence splitter — sufficient for legal English
     text.split(/(?<=[.?!])\s+/)
         .each_with_object([]) do |sentence, groups|
           if groups.empty? || (groups.last + " " + sentence).length > MAX_CHUNK_LENGTH

@@ -19,7 +19,11 @@ class DocumentTemplate < ApplicationRecord
   has_many :generation_logs, dependent: :destroy, foreign_key: "template_id"
   has_many :template_chunks, dependent: :destroy
 
-  after_save :enqueue_embedding, if: :saved_change_to_content_raw?
+  # Embed content chunks when content_raw changes
+  after_save :enqueue_content_embedding, if: :saved_change_to_content_raw?
+
+  # Embed intent chunk when title or description changes
+  after_save :enqueue_intent_embedding,  if: -> { saved_change_to_title? || saved_change_to_description? }
 
   store_accessor :metadata,
                   :jurisdiction,
@@ -38,7 +42,11 @@ class DocumentTemplate < ApplicationRecord
   
   private
 
-  def enqueue_embedding
-    DocumentTemplateEmbeddingJob.perform_later(id.to_s)
+  def enqueue_content_embedding
+    DocumentTemplateEmbeddingJob.perform_later(id.to_s, "content")
+  end
+ 
+  def enqueue_intent_embedding
+    DocumentTemplateEmbeddingJob.perform_later(id.to_s, "intent")
   end
 end

@@ -84,7 +84,6 @@ GEM
     brakeman (8.0.5)
       racc
     builder (3.3.0)
-    chronic (0.10.2)
     coderay (1.1.3)
     concurrent-ruby (1.3.7)
     connection_pool (3.0.2)
@@ -102,9 +101,21 @@ GEM
     ed25519 (1.4.0)
     erb (6.0.4)
     erubi (1.13.1)
+    et-orbi (1.4.0)
+      tzinfo
+    fugit (1.12.3)
+      et-orbi (~> 1.4)
+      raabro (~> 1.4)
     fuzzy_match (2.1.0)
     globalid (1.3.0)
       activesupport (>= 6.1)
+    good_job (4.19.1)
+      activejob (>= 6.1.0)
+      activerecord (>= 6.1.0)
+      concurrent-ruby (>= 1.3.1)
+      fugit (>= 1.11.0)
+      railties (>= 6.1.0)
+      thor (>= 1.0.0)
     httparty (0.24.2)
       csv
       mini_mime (>= 1.0.0)
@@ -208,6 +219,7 @@ GEM
       stringio
     puma (8.0.2)
       nio4r (~> 2.0)
+    raabro (1.4.0)
     racc (1.8.1)
     rack (3.2.6)
     rack-cors (3.0.0)
@@ -296,12 +308,6 @@ GEM
       rubocop-rails (>= 2.30)
     ruby-progressbar (1.13.0)
     securerandom (0.4.1)
-    sidekiq (8.1.6)
-      connection_pool (>= 3.0.0)
-      json (>= 2.16.0)
-      logger (>= 1.7.0)
-      rack (>= 3.2.0)
-      redis-client (>= 0.29.0)
     solid_cable (4.0.0)
       actioncable (>= 7.2)
       activejob (>= 7.2)
@@ -338,8 +344,6 @@ GEM
       base64
       websocket-extensions (>= 0.1.0)
     websocket-extensions (0.1.5)
-    whenever (1.1.2)
-      chronic (>= 0.6.3)
     zeitwerk (2.8.2)
 
 PLATFORMS
@@ -360,6 +364,7 @@ DEPENDENCIES
   debug
   dotenv-rails
   fuzzy_match
+  good_job
   kamal
   neighbor
   pg (~> 1.1)
@@ -370,12 +375,10 @@ DEPENDENCIES
   redis
   resend
   rubocop-rails-omakase
-  sidekiq
   solid_cable
   solid_cache
   thruster
   tzinfo-data
-  whenever
 
 RUBY VERSION
    ruby 3.3.4p94

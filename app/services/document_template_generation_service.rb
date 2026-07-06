@@ -1,4 +1,6 @@
 class DocumentTemplateGenerationService
+  DELIMITER = "---DOCUMENT---".freeze
+
   def initialize(document_template:, generation_log:)
     @template = document_template
     @log      = generation_log
@@ -7,7 +9,7 @@ class DocumentTemplateGenerationService
   def call
     provider = ProviderSelector.primary(LlmProvider)
     result   = call_with_fallback(provider)
-    parsed   = parse_structured_response(result[:content])
+    parsed   = parse_delimited_response(result[:content])
 
     @template.update!(
       title:           parsed[:title],
@@ -24,9 +26,9 @@ class DocumentTemplateGenerationService
       completion_tokens: result[:completion_tokens],
       status:            "success"
     )
+
   rescue ParseError => e
-    # LLM returned malformed JSON — log and fail
-    handle_failure(e)
+    handle_parse_failure(e)
     raise
   rescue ProviderUnavailableError => e
     handle_failure(e)
@@ -57,32 +59,65 @@ class DocumentTemplateGenerationService
     result.merge(provider: fallback)
   end
 
-  def parse_structured_response(content)
+  def parse_delimited_response(content)
+    Rails.logger.debug "[GenerationService] Raw LLM response: #{content}"
+
     cleaned = content.to_s.gsub(/```json|```/, "").strip
-    parsed  = JSON.parse(cleaned)
-  
-    title         = parsed["title"].to_s.strip
-    body          = parsed["content"].to_s.gsub('\n', "\n").strip  # unescape \n back to real newlines
-    practice_area = parsed["practice_area"].to_s.strip
-    document_type = parsed["document_type"].to_s.strip
-  
-    if title.blank? || body.blank?
-      raise ParseError, "LLM response missing required fields 'title' or 'content': #{content.truncate(200)}"
+
+    unless cleaned.include?(DELIMITER)
+      raise ParseError, "LLM response missing delimiter '#{DELIMITER}' — raw: #{content.truncate(500)}"
     end
-  
-    # Handle clarification response — treat as a generation failure
+
+    parts = cleaned.split(DELIMITER, 2)
+
+    unless parts.size == 2
+      raise ParseError, "LLM response could not be split on delimiter — raw: #{content.truncate(500)}"
+    end
+
+    metadata_line = parts[0].strip
+    document_body = parts[1].strip
+
+    begin
+      metadata = JSON.parse(metadata_line)
+    rescue JSON::ParserError => e
+      raise ParseError, "LLM metadata JSON invalid: #{e.message} — raw metadata: #{metadata_line.truncate(300)}"
+    end
+
+    raise ParseError, "LLM metadata is not a JSON object" unless metadata.is_a?(Hash)
+
+    title         = metadata["title"].to_s.strip
+    practice_area = metadata["practice_area"].to_s.strip
+    document_type = metadata["document_type"].to_s.strip
+
+    raise ParseError, "LLM response missing 'title' in metadata" if title.blank?
+    raise ParseError, "LLM response missing document body after delimiter" if document_body.blank?
+
     if title == "Clarification Needed"
       raise ParseError, "LLM could not determine document type from prompt: #{@template.description.truncate(200)}"
     end
-  
+
     {
       title:         title,
-      content:       body,
+      content:       document_body,
       practice_area: practice_area.presence || @template.practice_area,
       document_type: document_type.presence
     }
-  rescue JSON::ParserError => e
-    raise ParseError, "LLM returned invalid JSON: #{e.message} — raw: #{content.to_s.truncate(200)}"
+  end
+
+  # On ParseError — destroy the placeholder template entirely
+  # so it doesn't pollute the database or block future searches
+  def handle_parse_failure(error)
+    Rails.logger.error "[GenerationService] ParseError — destroying placeholder template #{@template.id}: #{error.message}"
+
+    @log.update!(
+      status:        "failed",
+      error_message: error.message.truncate(500)
+    )
+
+    @template.destroy!
+
+  rescue => e
+    Rails.logger.error "[GenerationService] Failed to destroy template #{@template.id}: #{e.message}"
   end
 
   def handle_failure(error)
@@ -92,6 +127,5 @@ class DocumentTemplateGenerationService
     )
   end
 
-  # Raised when the LLM returns malformed or incomplete JSON
   class ParseError < StandardError; end
 end
