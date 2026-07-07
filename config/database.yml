@@ -30,32 +30,35 @@ test:
 
 production:
   primary:
-    url: <%= ENV['DATABASE_URL'] %>
-    adapter: postgresql
-    encoding: unicode
-    prepared_statements: false # 👈 Add this line
-    pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
-  deploy:
-    url: <%= ENV['DATABASE_MIGRATION_URL'] %>
-    adapter: postgresql
-    encoding: unicode
-    prepared_statements: false # 👈 Add this line here too
-    database_tasks: true
-  primary:
     <<: *default
-    url: <%= ENV["DATABASE_URL"] %>
+    url: <%= ENV['DATABASE_URL'] %>
+    prepared_statements: false
+    pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+    
+  deploy:
+    <<: *default
+    url: <%= ENV['DATABASE_MIGRATION_URL'] %>
+    prepared_statements: false
+    database_tasks: true
+
   cable:
     <<: *default
     url: <%= ENV["DATABASE_URL"] %>
+    prepared_statements: false
     migrations_paths: db/cable_migrate
+
   queue:
     <<: *default
     url: <%= ENV["DATABASE_URL"] %>
+    prepared_statements: false
     migrations_paths: db/queue_migrate
+
   cache:
     <<: *default
     url: <%= ENV["DATABASE_URL"] %>
+    prepared_statements: false
     migrations_paths: db/cache_migrate
+
 #  primary: &primary_production
 #    <<: *default
 #    database: law_office_production
