@@ -1,7 +1,7 @@
 class LlmProvider < ApplicationRecord
   include ProviderHealthTrackable
 
-  ADAPTER_KEYS = %w[openai anthropic gemini groq openai mistral].freeze
+  ADAPTER_KEYS = %w[openai anthropic gemini groq mistral].freeze
 
   has_many :generation_logs, dependent: :nullify
 

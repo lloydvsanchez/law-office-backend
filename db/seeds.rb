@@ -65,3 +65,130 @@ laws.each do |law|
 end
 
 puts "Seeded #{laws.size} Philippine laws"
+
+# ==============================================================================
+# LLM Providers
+# Seeded only if the corresponding API key environment variable is present.
+# Idempotent — safe to run multiple times.
+# ==============================================================================
+
+llm_providers = [
+  {
+    name:              "OpenAI",
+    adapter_key:       "openai",
+    model:             "gpt-4o",
+    priority:          1,
+    failure_threshold: 3,
+    api_key_env:       "OPENAI_API_KEY"
+  },
+  {
+    name:              "Anthropic",
+    adapter_key:       "anthropic",
+    model:             "claude-sonnet-4-6",
+    priority:          2,
+    failure_threshold: 3,
+    api_key_env:       "ANTHROPIC_API_KEY"
+  },
+  {
+    name:              "Gemini",
+    adapter_key:       "gemini",
+    model:             "gemini-2.0-flash",
+    priority:          3,
+    failure_threshold: 3,
+    api_key_env:       "GEMINI_API_KEY"
+  },
+  {
+    name:              "Groq",
+    adapter_key:       "groq",
+    model:             "llama-3.3-70b-versatile",
+    priority:          4,
+    failure_threshold: 3,
+    api_key_env:       "GROQ_API_KEY"
+  },
+  {
+    name:              "Mistral",
+    adapter_key:       "mistral",
+    model:             "mistral-large-latest",
+    priority:          5,
+    failure_threshold: 3,
+    api_key_env:       "MISTRAL_API_KEY"
+  }
+]
+
+llm_providers.each do |attrs|
+  api_key = ENV[attrs[:api_key_env]].presence
+
+  unless api_key
+    puts "  Skipping LlmProvider '#{attrs[:name]}' — #{attrs[:api_key_env]} not set"
+    next
+  end
+
+  provider = LlmProvider.find_or_create_by!(adapter_key: attrs[:adapter_key]) do |p|
+    p.name              = attrs[:name]
+    p.model             = attrs[:model]
+    p.priority          = attrs[:priority]
+    p.failure_threshold = attrs[:failure_threshold]
+    p.is_enabled        = true
+    p.status            = "healthy"
+    p.config            = { "api_key" => api_key }
+  end
+
+  puts "  #{provider.previously_new_record? ? "Created" : "Found"} LlmProvider '#{provider.name}'"
+end
+
+# ==============================================================================
+# Embedding Providers
+# Ollama has no API key — seeded if OLLAMA_BASE_URL is set or defaults to localhost.
+# HuggingFace seeded only if HUGGINGFACE_API_KEY is present.
+# Idempotent — safe to run multiple times.
+# ==============================================================================
+
+embedding_providers = [
+  {
+    name:              "Ollama",
+    adapter_key:       "ollama",
+    model:             ENV.fetch("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"),
+    priority:          1,
+    failure_threshold: 3,
+    api_key_env:       nil,  # no API key needed
+    config:            { "base_url" => ENV.fetch("OLLAMA_BASE_URL", "http://localhost:11434") }
+  },
+  {
+    name:              "HuggingFace",
+    adapter_key:       "hugging_face",
+    model:             "sentence-transformers/all-MiniLM-L6-v2",
+    priority:          2,
+    failure_threshold: 3,
+    api_key_env:       "HUGGINGFACE_API_KEY",
+    config:            nil  # built from api_key below
+  }
+]
+
+embedding_providers.each do |attrs|
+  # Ollama has no API key — always seed it
+  # HuggingFace requires HUGGINGFACE_API_KEY
+  if attrs[:api_key_env].present?
+    api_key = ENV[attrs[:api_key_env]].presence
+
+    unless api_key
+      puts "  Skipping EmbeddingProvider '#{attrs[:name]}' — #{attrs[:api_key_env]} not set"
+      next
+    end
+
+    config = { "api_key" => api_key }
+  else
+    config = attrs[:config]
+  end
+
+  provider = EmbeddingProvider.find_or_create_by!(adapter_key: attrs[:adapter_key]) do |p|
+    p.name              = attrs[:name]
+    p.model             = attrs[:model]
+    p.priority          = attrs[:priority]
+    p.failure_threshold = attrs[:failure_threshold]
+    p.is_enabled        = true
+    p.status            = "healthy"
+    p.config            = config
+  end
+
+  puts "  #{provider.previously_new_record? ? "Created" : "Found"} EmbeddingProvider '#{provider.name}'"
+end
