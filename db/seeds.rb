@@ -80,7 +80,7 @@ embedding_providers = [
   {
     name:              "HuggingFace",
     adapter_key:       "hugging_face",
-    model:             "sentence-transformers/all-MiniLM-L6-v2",
+    model:             "sentence-transformers/all-mpnet-base-v2",
     priority:          Rails.env.production? ? 1 : 2,
     failure_threshold: 3,
     api_key_env:       "HUGGINGFACE_API_KEY",
