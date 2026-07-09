@@ -1,27 +1,141 @@
-# This file should ensure the existence of records required to run the application in every environment (production,
-# development, test). The code here should be idempotent so that it can be executed at any point in every environment.
-# The data can then be loaded with the bin/rails db:seed command (or created alongside the database with db:setup).
-#
-# Example:
-#
-#   ["Action", "Comedy", "Drama", "Horror"].each do |genre_name|
-#     MovieGenre.find_or_create_by!(name: genre_name)
-#   end
-if Rails.env.development?
-  EmbeddingProvider.find_or_create_by(adapter_key: "ollama") do |p|
-    p.name      = "Ollama (local)"
-    p.model     = ENV.fetch("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
-    p.config    = { "base_url" => ENV.fetch("OLLAMA_BASE_URL", "http://localhost:11434") }
-    p.is_enabled = true
+# ==============================================================================
+# LLM Providers
+# Seeded only if the corresponding API key environment variable is present.
+# Idempotent — safe to run multiple times via find_or_create_by!
+# ==============================================================================
+
+puts "==> Seeding LLM Providers..."
+
+llm_providers = [
+  {
+    name:              "OpenAI",
+    adapter_key:       "openai",
+    model:             "gpt-4o",
+    priority:          1,
+    failure_threshold: 3,
+    api_key_env:       "OPENAI_API_KEY"
+  },
+  {
+    name:              "Anthropic",
+    adapter_key:       "anthropic",
+    model:             "claude-sonnet-4-6",
+    priority:          2,
+    failure_threshold: 3,
+    api_key_env:       "ANTHROPIC_API_KEY"
+  },
+  {
+    name:              "Gemini",
+    adapter_key:       "gemini",
+    model:             "gemini-2.0-flash",
+    priority:          3,
+    failure_threshold: 3,
+    api_key_env:       "GEMINI_API_KEY"
+  },
+  {
+    name:              "Groq",
+    adapter_key:       "groq",
+    model:             "llama-3.3-70b-versatile",
+    priority:          4,
+    failure_threshold: 3,
+    api_key_env:       "GROQ_API_KEY"
+  },
+  {
+    name:              "Mistral",
+    adapter_key:       "mistral",
+    model:             "mistral-large-latest",
+    priority:          5,
+    failure_threshold: 3,
+    api_key_env:       "MISTRAL_API_KEY"
+  }
+]
+
+llm_providers.each do |attrs|
+  api_key = ENV[attrs[:api_key_env]].presence
+
+  unless api_key
+    puts "  Skipping LlmProvider '#{attrs[:name]}' — #{attrs[:api_key_env]} not set"
+    next
   end
-else
-  EmbeddingProvider.find_or_create_by(adapter_key: "hugging_face") do |p|
-    p.name      = "HuggingFace Inference API"
-    p.model     = "sentence-transformers/all-MiniLM-L6-v2"
-    p.config    = { "api_key" => ENV["HUGGINGFACE_API_KEY"] }
-    p.is_enabled = true
+
+  provider = LlmProvider.find_or_create_by!(adapter_key: attrs[:adapter_key]) do |p|
+    p.name              = attrs[:name]
+    p.model             = attrs[:model]
+    p.priority          = attrs[:priority]
+    p.failure_threshold = attrs[:failure_threshold]
+    p.is_enabled        = true
+    p.status            = "healthy"
+    p.failure_count     = 0
+    p.config            = { "api_key" => api_key }
   end
+
+  puts "  #{provider.previously_new_record? ? "Created" : "Found"} LlmProvider '#{provider.name}'"
 end
+
+# ==============================================================================
+# Embedding Providers
+# Ollama — always seeded locally, disabled in production
+# HuggingFace — seeded only if HUGGINGFACE_API_KEY is present
+# Idempotent — safe to run multiple times via find_or_create_by!
+# ==============================================================================
+
+puts "==> Seeding Embedding Providers..."
+
+embedding_providers = [
+  {
+    name:              "Ollama",
+    adapter_key:       "ollama",
+    model:             ENV.fetch("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"),
+    priority:          Rails.env.production? ? 2 : 1,
+    failure_threshold: 3,
+    api_key_env:       nil,
+    is_enabled:        !Rails.env.production?,
+    config:            { "base_url" => ENV.fetch("OLLAMA_BASE_URL", "http://localhost:11434") }
+  },
+  {
+    name:              "HuggingFace",
+    adapter_key:       "hugging_face",
+    model:             "sentence-transformers/all-mpnet-base-v2",
+    priority:          Rails.env.production? ? 1 : 2,
+    failure_threshold: 3,
+    api_key_env:       "HUGGINGFACE_API_KEY",
+    is_enabled:        true,
+    config:            nil
+  }
+]
+
+embedding_providers.each do |attrs|
+  if attrs[:api_key_env].present?
+    api_key = ENV[attrs[:api_key_env]].presence
+
+    unless api_key
+      puts "  Skipping EmbeddingProvider '#{attrs[:name]}' — #{attrs[:api_key_env]} not set"
+      next
+    end
+
+    config = { "api_key" => api_key }
+  else
+    config = attrs[:config]
+  end
+
+  provider = EmbeddingProvider.find_or_create_by!(adapter_key: attrs[:adapter_key]) do |p|
+    p.name              = attrs[:name]
+    p.model             = attrs[:model]
+    p.priority          = attrs[:priority]
+    p.failure_threshold = attrs[:failure_threshold]
+    p.is_enabled        = attrs[:is_enabled]
+    p.status            = "healthy"
+    p.failure_count     = 0
+    p.config            = config
+  end
+
+  puts "  #{provider.previously_new_record? ? "Created" : "Found"} EmbeddingProvider '#{provider.name}'"
+end
+
+# ==============================================================================
+# Philippine Laws
+# ==============================================================================
+
+puts "==> Seeding Philippine Laws..."
 
 laws = [
   { abbreviation: "BP 22",       pattern: '\bBP\s*22\b',        full_name: "Batas Pambansa Bilang 22",                       description: "the Bouncing Checks Law, which penalizes the making or drawing of checks without sufficient funds" },
@@ -51,67 +165,19 @@ laws = [
   { abbreviation: "NIRC",        pattern: '\bNIRC\b',           full_name: "the National Internal Revenue Code",             description: "the primary tax law of the Philippines" },
   { abbreviation: "CIVIL CODE",  pattern: '\bCIVIL?\s*CODE\b',  full_name: "the Civil Code of the Philippines",             description: "the law governing civil relations" },
   { abbreviation: "LABOR CODE",  pattern: '\bLABOR\s*CODE\b',   full_name: "the Labor Code of the Philippines",             description: "Presidential Decree No. 442 governing employment and labor relations" },
-  { abbreviation: "FAMILY CODE", pattern: '\bFAMILY\s*CODE\b',  full_name: "the Family Code of the Philippines",            description: "Executive Order No. 209 governing marriage, family, and property relations" },
+  { abbreviation: "FAMILY CODE", pattern: '\bFAMILY\s*CODE\b',  full_name: "the Family Code of the Philippines",            description: "Executive Order No. 209 governing marriage, family, and property relations" }
 ]
 
 laws.each do |law|
-  PhilippineLaw.find_or_create_by!(abbreviation: law[:abbreviation]) do |record|
-    record.pattern     = law[:pattern]
-    record.full_name   = law[:full_name]
-    record.description = law[:description]
-    record.source      = "seeded"
-    record.is_verified = true
+  record = PhilippineLaw.find_or_create_by!(abbreviation: law[:abbreviation]) do |p|
+    p.pattern     = law[:pattern]
+    p.full_name   = law[:full_name]
+    p.description = law[:description]
+    p.source      = "seeded"
+    p.is_verified = true
   end
+
+  puts "  #{record.previously_new_record? ? "Created" : "Found"} PhilippineLaw '#{record.abbreviation}'"
 end
 
-puts "Seeded #{laws.size} Philippine laws"
-
-embedding_providers = [
-  {
-    name:              "Ollama",
-    adapter_key:       "ollama",
-    model:             ENV.fetch("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"),
-    priority:          Rails.env.production? ? 2 : 1,
-    failure_threshold: 3,
-    api_key_env:       nil,
-    config:            { "base_url" => ENV.fetch("OLLAMA_BASE_URL", "http://localhost:11434") },
-    is_enabled:        !Rails.env.production?  # disabled in production — no local Ollama server
-  },
-  {
-    name:              "HuggingFace",
-    adapter_key:       "hugging_face",
-    model:             "sentence-transformers/all-mpnet-base-v2",
-    priority:          Rails.env.production? ? 1 : 2,
-    failure_threshold: 3,
-    api_key_env:       "HUGGINGFACE_API_KEY",
-    config:            nil,
-    is_enabled:        true  # always enabled when API key is present
-  }
-]
-
-embedding_providers.each do |attrs|
-  if attrs[:api_key_env].present?
-    api_key = ENV[attrs[:api_key_env]].presence
-
-    unless api_key
-      puts "  Skipping EmbeddingProvider '#{attrs[:name]}' — #{attrs[:api_key_env]} not set"
-      next
-    end
-
-    config = { "api_key" => api_key }
-  else
-    config = attrs[:config]
-  end
-
-  provider = EmbeddingProvider.find_or_create_by!(adapter_key: attrs[:adapter_key]) do |p|
-    p.name              = attrs[:name]
-    p.model             = attrs[:model]
-    p.priority          = attrs[:priority]
-    p.failure_threshold = attrs[:failure_threshold]
-    p.is_enabled        = attrs[:is_enabled]
-    p.status            = "healthy"
-    p.config            = config
-  end
-
-  puts "  #{provider.previously_new_record? ? "Created" : "Found"} EmbeddingProvider '#{provider.name}'"
-end
+puts "==> Seeding complete."
