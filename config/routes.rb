@@ -15,6 +15,7 @@ Rails.application.routes.draw do
       end
       namespace :templates do
         post :search, to: "searches#create"
+        post :regenerate, to: "regenerations#create"
       end
      
       resources :generations, only: [] do
