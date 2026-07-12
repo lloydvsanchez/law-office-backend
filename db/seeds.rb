@@ -131,6 +131,23 @@ embedding_providers.each do |attrs|
   puts "  #{provider.previously_new_record? ? "Created" : "Found"} EmbeddingProvider '#{provider.name}'"
 end
 
+# In the HuggingFace embedding provider seed block — replace find_or_create_by! with:
+provider = EmbeddingProvider.find_or_initialize_by(adapter_key: "hugging_face")
+provider.assign_attributes(
+  name:              "HuggingFace",
+  model:             "sentence-transformers/all-mpnet-base-v2",
+  priority:          Rails.env.production? ? 1 : 2,
+  failure_threshold: 3,
+  is_enabled:        true,
+  config:            { "api_key" => ENV["HUGGINGFACE_API_KEY"].presence }
+)
+# Only set these on first creation
+provider.status      ||= "healthy"
+provider.failure_count ||= 0
+provider.save!
+
+puts "  #{provider.previously_new_record? ? "Created" : "Updated"} EmbeddingProvider '#{provider.name}' with model #{provider.model}"
+
 # ==============================================================================
 # Philippine Laws
 # ==============================================================================
