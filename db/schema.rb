@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_05_223756) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_12_122713) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -64,6 +64,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_05_223756) do
     t.index ["is_enabled"], name: "index_embedding_providers_on_is_enabled"
     t.index ["priority"], name: "index_embedding_providers_on_priority"
     t.index ["status"], name: "index_embedding_providers_on_status"
+    t.check_constraint "adapter_key::text = ANY (ARRAY['ollama'::character varying, 'hugging_face'::character varying, 'gemini'::character varying]::text[])", name: "chk_adapter_key"
     t.check_constraint "status::text = ANY (ARRAY['healthy'::character varying, 'rate_limited'::character varying, 'quota_exhausted'::character varying, 'unreachable'::character varying]::text[])", name: "chk_embedding_provider_status"
   end
 
@@ -244,6 +245,14 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_05_223756) do
     t.index ["is_verified"], name: "index_philippine_laws_on_is_verified"
     t.index ["source"], name: "index_philippine_laws_on_source"
     t.check_constraint "source::text = ANY (ARRAY['seeded'::character varying, 'llm_discovered'::character varying]::text[])", name: "chk_philippine_law_source"
+  end
+
+  create_table "solid_cache_entries", force: :cascade do |t|
+    t.binary "key", null: false
+    t.binary "value", null: false
+    t.datetime "created_at", null: false
+    t.index ["created_at"], name: "index_solid_cache_entries_on_created_at"
+    t.index ["key"], name: "index_solid_cache_entries_on_key", unique: true
   end
 
   create_table "template_chunks", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|

@@ -3,6 +3,7 @@ class TemplateSearchService
   SIMILARITY_THRESHOLD       = 0.7
   DISTANCE_THRESHOLD         = 1 - SIMILARITY_THRESHOLD  # 0.3
   TITLE_SIMILARITY_THRESHOLD = 0.6                       # pg_trgm
+  CACHE_TTL                  = 7.days  # 604,800 seconds — industry standard for stable query embeddings
 
   def self.call(query:, user: nil, organization: nil, limit: DEFAULT_LIMIT, practice_area: nil, court_level: nil)
     new(
@@ -25,33 +26,29 @@ class TemplateSearchService
   end
 
   def call
-    # Layer 1 — pg_trgm on title + description (free, no embedding)
-    title_results        = search_by_title_and_description(limit: @limit)
-    remaining_after_title = @limit - title_results.size
+    title_results    = search_by_title_and_description(limit: @limit)
+    remaining_limit  = @limit - title_results.size
 
-    # Layer 2a + 2b — only if Layer 1 didn't fill the quota
-    intent_results  = []
-    content_results = []
+    semantic_results = if remaining_limit > 0
+      @embedding_provider = ProviderSelector.primary(EmbeddingProvider)
+      query_embedding     = embed_with_cache(@query)
+      intent_results      = search_by_chunk_type(query_embedding, chunk_type: "intent",  limit: remaining_limit)
+      remaining_after_intent = remaining_limit - new_results_count(intent_results, title_results)
 
-    if remaining_after_title > 0
-      @embedding_provider  = ProviderSelector.primary(EmbeddingProvider)
-      query_embedding      = embed_with_fallback(@query)
-
-      # Layer 2a — intent chunks (title + description embeddings)
-      intent_results        = search_by_chunk_type(query_embedding, chunk_type: "intent",   limit: remaining_after_title)
-      remaining_after_intent = remaining_after_title - new_results_count(intent_results, title_results)
-
-      # Layer 2b — content chunks — only if still slots remaining
-      if remaining_after_intent > 0
-        content_results = search_by_chunk_type(query_embedding, chunk_type: "content", limit: remaining_after_intent)
+      content_results = if remaining_after_intent > 0
+        search_by_chunk_type(query_embedding, chunk_type: "content", limit: remaining_after_intent)
+      else
+        []
       end
+
+      intent_results + content_results
+    else
+      []
     end
 
-    combined = merge_and_deduplicate(title_results, intent_results, content_results)
-
+    combined = merge_and_deduplicate(title_results, semantic_results)
     return { results: combined, generated: false, generation_id: nil } if combined.any?
 
-    # Layer 3 — global guard before generating
     existing = find_similar_globally
     if existing.any?
       Rails.logger.info "[SearchService] Layer 3 caught #{existing.size} similar template(s)"
@@ -248,6 +245,43 @@ class TemplateSearchService
   # Shared helpers
   # ---------------------------------------------------------------------------
 
+  def visible_templates
+    base = DocumentTemplate.where(status: %w[review published])
+
+    if @organization.present?
+      base.where(
+        "document_templates.visibility = ? OR document_templates.organization_id = ?",
+        "public", @organization.id
+      )
+    else
+      base.where(visibility: "public")
+    end
+  end
+
+  def apply_court_level_filter(query)
+    query
+      .joins("LEFT JOIN template_court_levels ON template_court_levels.template_id = document_templates.id")
+      .where("template_court_levels.court_level = ? OR template_court_levels.id IS NULL", @court_level)
+  end
+
+  # Cache query embeddings in Solid Cache — 7 day TTL
+  # Key includes model name so cache auto-invalidates on provider/model change
+  def embed_with_cache(text)
+    model_name  = @embedding_provider.model
+    cache_key   = "embedding:query:#{Digest::SHA256.hexdigest(text)}:#{model_name}"
+
+    cached = Rails.cache.read(cache_key)
+    if cached
+      Rails.logger.debug "[SearchService] Embedding cache HIT for query: '#{text.truncate(50)}'"
+      return cached
+    end
+
+    Rails.logger.debug "[SearchService] Embedding cache MISS — calling provider for: '#{text.truncate(50)}'"
+    embedding = embed_with_fallback(text)
+    Rails.cache.write(cache_key, embedding, expires_in: CACHE_TTL)
+    embedding
+  end
+
   def embed_with_fallback(text)
     adapter = Embedding::AdapterFactory.for(@embedding_provider)
     result  = adapter.embed(text: text)
@@ -266,24 +300,5 @@ class TemplateSearchService
     result              = adapter.embed(text: text)
     ProviderSelector.handle_success(@embedding_provider)
     result
-  end
-
-  def visible_templates
-    base = DocumentTemplate.where(status: %w[review published])
-
-    if @organization.present?
-      base.where(
-        "document_templates.visibility = ? OR document_templates.organization_id = ?",
-        "public", @organization.id
-      )
-    else
-      base.where(visibility: "public")
-    end
-  end
-
-  def apply_court_level_filter(query)
-    query
-      .joins("LEFT JOIN template_court_levels ON template_court_levels.template_id = document_templates.id")
-      .where("template_court_levels.court_level = ? OR template_court_levels.id IS NULL", @court_level)
   end
 end

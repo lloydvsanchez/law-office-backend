@@ -1,7 +1,7 @@
 class EmbeddingProvider < ApplicationRecord
   include ProviderHealthTrackable
 
-  ADAPTER_KEYS = %w[ollama hugging_face].freeze
+  ADAPTER_KEYS = %w[ollama hugging_face gemini].freeze
 
   validates :name,        presence: true
   validates :adapter_key, presence: true,

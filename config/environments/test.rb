@@ -54,4 +54,5 @@ Rails.application.configure do
   # Run jobs inline in test — predictable, synchronous execution
   config.active_job.queue_adapter = :good_job
   config.good_job.execution_mode  = :inline
+  config.cache_store = :null_store
 end
